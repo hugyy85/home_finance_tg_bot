@@ -1,3 +1,5 @@
+import datetime
+
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import ReplyKeyboardRemove, \
     ReplyKeyboardMarkup, KeyboardButton, \
@@ -6,9 +8,10 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.contrib.fsm_storage.redis import RedisStorage
 from aiogram.utils.markdown import text, bold, italic
+from peewee import IntegrityError
 
 from config import API_TOKEN, REDIS_DB, REDIS_PORT, REDIS_HOST
-from models import Category, Product, Payer
+from models import Category, Product, Payer, ReportPeriod, db, User
 
 
 # Initialize bot and dispatcher
@@ -84,14 +87,14 @@ async def _payer_chosen(message: types.Message, state: FSMContext):
         return
     await state.update_data(chosen_payer=message.text.lower())
     user_data = await state.get_data()
-
-    category = Category.select().where(Category.name == user_data['chosen_category'])
-    payer = Payer.select().where(Payer.name == user_data['chosen_payer'])
+    user, _ = User.get_or_create(**dict(message.chat))
     Product.create(
         name=user_data['chosen_name'],
-        category=category,
-        payer=payer,
-        price=user_data['chosen_price']
+        category=Category.select().where(Category.name == user_data['chosen_category']),
+        payer=Payer.select().where(Payer.name == user_data['chosen_payer']),
+        price=user_data['chosen_price'],
+        report_month=ReportPeriod.select().order_by(ReportPeriod.id.desc()).get(),
+        user=user
 
     )
     await message.answer(f"Вы ввели покупку {bold(user_data['chosen_name'])} в категорию {bold(user_data['chosen_category'])}"
@@ -108,17 +111,35 @@ async def get_last_date_check(message):
     await message.reply(last_product.creation_date)
 
 
+@dp.message_handler(commands=['show_report_period'])
+async def show_report_period(message):
+    report_period = ReportPeriod.select().order_by(ReportPeriod.id.desc()).get()
+    await message.reply(f'{report_period.month}.{report_period.year}')
+
+
+@dp.message_handler(commands=['next_report_period'])
+async def next_report_period(message):
+    date_now = datetime.datetime.now()
+    try:
+        report = ReportPeriod.create(month=date_now.month, year=date_now.year)
+        answer = f'{report.month}.{report.year}'
+    except IntegrityError:
+        db.rollback()
+        answer = 'Данный месяц еще не закончился, попробуйте изменить отчетный период 1го числа следующего месяца'
+    await message.reply(answer)
+
+
 @dp.message_handler()
 async def answer_tmpl(message):
     answer = """
        /add_product - Добавить запись о покупке
-       /last_date_check - Добавить запись о покупке
+       /last_date_check - Показать последнюю дату добавления покупки
+       /show_report_period - Показать отчетный месяц
+       /next_report_period - Перейти в следующий отчетный месяц
        """
     await message.reply(answer)
 
 
-# и добавить запись в какой месяц записываем
-# Добавить разделение по пользователям
 # добавить отображение остатка,
 # добавить сумма на месяц, добавить перерасходы, добавить отложенные деньги,
 # добавить последние 10 строк, для сверки, а лучше количество строк из сообщения
