@@ -8,11 +8,10 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.contrib.fsm_storage.redis import RedisStorage
 from aiogram.utils.markdown import text, bold, italic
-from peewee import IntegrityError
+from peewee import IntegrityError, fn
 
 from config import API_TOKEN, REDIS_DB, REDIS_PORT, REDIS_HOST
-from models import Category, Product, Payer, ReportPeriod, db, User
-
+from models import Category, Product, Payer, ReportPeriod, db, User, PiggyBank
 
 # Initialize bot and dispatcher
 bot = Bot(token=API_TOKEN)
@@ -20,6 +19,7 @@ storage = RedisStorage(REDIS_HOST, REDIS_PORT, db=REDIS_DB)
 dp = Dispatcher(bot, storage=storage)
 CATEGORIES = [x.name.lower() for x in Category.select()]
 PAYER = [x.name.lower() for x in Payer.select()]
+
 
 # ============= Процесс добавления нового товара в БД ================
 class OrderProduct(StatesGroup):
@@ -97,11 +97,14 @@ async def _payer_chosen(message: types.Message, state: FSMContext):
         user=user
 
     )
-    await message.answer(f"Вы ввели покупку {bold(user_data['chosen_name'])} в категорию {bold(user_data['chosen_category'])}"
-                         f" с ценой {bold(user_data['chosen_price'])} и покупателем {bold(user_data['chosen_payer'])}\n"
-                         f" Данные записаны", parse_mode='MARKDOWN')
+    await message.answer(
+        f"Вы ввели покупку {bold(user_data['chosen_name'])} в категорию {bold(user_data['chosen_category'])}"
+        f" с ценой {bold(user_data['chosen_price'])} и покупателем {bold(user_data['chosen_payer'])}\n"
+        f" Данные записаны", parse_mode='MARKDOWN')
     await OrderProduct.next()
     await state.finish()
+
+
 # ========== Конец процесса добавления нового товара в бд ==============
 
 
@@ -119,13 +122,75 @@ async def show_report_period(message):
 
 @dp.message_handler(commands=['next_report_period'])
 async def next_report_period(message):
+    message_text = message.text.split()
+    if len(message_text) != 2:
+        await message.reply("Необходимо добавить сумму на месяц")
+        return
+    balance = message_text[1]
+
     date_now = datetime.datetime.now()
     try:
-        report = ReportPeriod.create(month=date_now.month, year=date_now.year)
-        answer = f'{report.month}.{report.year}'
+        report = ReportPeriod.create(month=date_now.month, year=date_now.year, balance=balance)
+        answer = f'{report.month}.{report.year} - сумма на месяц: {balance}'
     except IntegrityError:
         db.rollback()
         answer = 'Данный месяц еще не закончился, попробуйте изменить отчетный период 1го числа следующего месяца'
+    await message.reply(answer)
+
+
+@dp.message_handler(commands=['show_report'])
+async def show_report(message):
+    try:
+        user = User.get(**dict(message.chat))
+    except User.DoesNotExist:
+        await message.reply("Для вашего пользователя отчета нет")
+        return
+    report_period = ReportPeriod.select().order_by(ReportPeriod.id.desc()).get()
+    spent_money = Product.select(fn.SUM(Product.price)) \
+        .where((Product.user == user) & (Product.report_month == report_period)) \
+        .get()
+    piggy_bank = PiggyBank.select(fn.SUM(PiggyBank.balance)).get()
+    total_balance = report_period.balance - spent_money.sum
+
+    await message.reply(
+        f"Остаток в этом месяце: {total_balance}\nОстаток на карте(+отложенные) {total_balance + + piggy_bank.sum}")
+
+
+@dp.message_handler(commands=['show_last_products'])
+async def show_last_products(message):
+    try:
+        user = User.get(**dict(message.chat))
+    except User.DoesNotExist:
+        await message.reply("Для вашего пользователя отчета нет")
+        return
+
+    products = Product.select().where(Product.user == user).order_by(Product.id.desc())
+    answer = ''
+    for prod in products:
+        answer += f'{prod.id} - {prod.name} - {prod.price} - {prod.creation_date.strftime("%d.%m.%y %H:%M:%S")}\n'
+
+    await message.reply(answer)
+
+
+@dp.message_handler(commands=['remove_product_by_id'])
+async def remove_product_by_id(message):
+    try:
+        user = User.get(**dict(message.chat))
+    except User.DoesNotExist:
+        await message.reply("Для вашего пользователя отчета нет")
+        return
+
+    message_text = message.text.split()
+    if len(message_text) != 2:
+        await message.reply("Необходимо добавить id для удаления покупки")
+        return
+    product_id = message_text[1]
+    try:
+        product = Product.get(id=product_id)
+        product.delete_instance()
+    except Product.DoesNotExist:
+        answer = 'Покупки с таким ID не существует'
+    answer = f'Покупка с айди {product_id} удалена'
     await message.reply(answer)
 
 
@@ -135,14 +200,16 @@ async def answer_tmpl(message):
        /add_product - Добавить запись о покупке
        /last_date_check - Показать последнюю дату добавления покупки
        /show_report_period - Показать отчетный месяц
-       /next_report_period - Перейти в следующий отчетный месяц
+       /next_report_period 80000 - Перейти в следующий отчетный месяц c балансом 80000
+       /show_report - Показать отчет за текущий месяц
+       /show_last_products - Показать последние 10 добавленных записей
+       /remove_product_by_id - удалить покупку по айдишнику
        """
     await message.reply(answer)
 
 
-# добавить отображение остатка,
-# добавить сумма на месяц, добавить перерасходы, добавить отложенные деньги,
-# добавить последние 10 строк, для сверки, а лучше количество строк из сообщения
+# добавить перерасходы,
+# Добавить возможность вносить изменения в бд быстрое, так как вероятны ошибки
 
 
 if __name__ == '__main__':

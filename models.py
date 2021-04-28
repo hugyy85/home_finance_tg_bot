@@ -28,6 +28,7 @@ class Payer(BaseModel):
 class ReportPeriod(BaseModel):
     month = IntegerField()
     year = IntegerField()
+    balance = FloatField()
 
     class Meta:
         indexes = (
@@ -53,8 +54,13 @@ class Product(BaseModel):
     user = ForeignKeyField(User)
 
 
+class PiggyBank(BaseModel):
+    name = CharField(unique=True)
+    balance = FloatField(default=0)
+
+
 def first_init_db():
-    db.create_tables([Product, Category, Payer, ReportPeriod, User])
+    db.create_tables([Product, Category, Payer, ReportPeriod, User, PiggyBank])
 
     # add default Categories
     categories = ['транспорт', 'еда', 'подарки',
@@ -69,6 +75,10 @@ def first_init_db():
         Payer.create(name=payer)
 
     date_now = datetime.now()
-    ReportPeriod.create(month=date_now.month, year=date_now.year)
+    ReportPeriod.create(month=date_now.month, year=date_now.year, balance=7495)
+
+    piggy_bank = [{'name': 'car', 'balance': 6000}, {'name': 'holidays', 'balance': 4908},
+                  {'name': 'cashback', 'balance': 4276}]
+    [PiggyBank.create(**x) for x in piggy_bank]
 
 # first_init_db()
