@@ -9,6 +9,9 @@ ENV LANG ru_RU.UTF-8
 ENV LANGUAGE ru_RU:en
 ENV LC_ALL ru_RU.UTF-8
 
+ENV DEBIAN_FRONTEND noninteractive
+ENV TZ=Asia/Novosibirsk
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 RUN pip install --no-cache-dir poetry~=1.1.3
 
