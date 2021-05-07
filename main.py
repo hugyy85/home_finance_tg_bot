@@ -1,13 +1,11 @@
 import datetime
 
 from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import ReplyKeyboardRemove, \
-    ReplyKeyboardMarkup, KeyboardButton, \
-    InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import KeyboardButton
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.contrib.fsm_storage.redis import RedisStorage
-from aiogram.utils.markdown import text, bold, italic
+from aiogram.utils.markdown import bold
 from peewee import IntegrityError, fn
 
 from config import API_TOKEN, REDIS_DB, REDIS_PORT, REDIS_HOST
@@ -151,9 +149,13 @@ async def show_report(message):
         .get()
     piggy_bank = PiggyBank.select(fn.SUM(PiggyBank.balance)).get()
     total_balance = report_period.balance - spent_money.sum
-
-    await message.reply(
-        f"Остаток в этом месяце: {total_balance}\nОстаток на карте(+отложенные) {total_balance + + piggy_bank.sum}")
+    plan_and_real = Product.select(fn.SUM(Product.price), Category.name, Category.plan_money).join(Category)\
+        .where((Product.user == user) & (Product.report_month == report_period)).group_by(Category.name, Category.plan_money)
+    answer = 'Потрачено - Запланировано - Остаток - Категория\n'
+    for plan in plan_and_real:
+        answer += f'{plan.sum}  -  {plan.category.plan_money}  -  {plan.category.plan_money - plan.sum}  -  {plan.category.name}\n'
+    answer += f"Остаток в этом месяце: {total_balance}\nОстаток на карте(+отложенные) {total_balance + piggy_bank.sum}"
+    await message.reply(answer)
 
 
 @dp.message_handler(commands=['show_last_products'])
@@ -209,7 +211,9 @@ async def answer_tmpl(message):
 
 
 # добавить перерасходы,
-# Добавить возможность вносить изменения в бд быстрое, так как вероятны ошибки
+# добавить фронт для отображения таблицы с данными - сколько потрачено, в каких категориях, и кем,
+# добавить возможность изменять piggybank из фронта,
+# добавить планированный бюджет и если бюджет привышен, то алерт
 
 
 if __name__ == '__main__':

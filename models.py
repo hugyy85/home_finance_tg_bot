@@ -19,6 +19,7 @@ class BaseModel(Model):
 
 class Category(BaseModel):
     name = CharField(max_length=255, unique=True)
+    plan_money = FloatField(null=True)
 
 
 class Payer(BaseModel):
@@ -81,4 +82,22 @@ def first_init_db():
                   {'name': 'cashback', 'balance': 4276}]
     [PiggyBank.create(**x) for x in piggy_bank]
 
-# first_init_db()
+
+def add_column():
+    from playhouse.migrate import PostgresqlMigrator, migrate
+    migrator = PostgresqlMigrator(db)
+    plan_money = FloatField(default=None, null=True)
+
+    migrate(
+        migrator.add_column('category', 'plan_money', plan_money),
+    )
+    categories = {'транспорт': 1000, 'еда': 25000, 'подарки': 3000,
+                  'медицина': 3000, 'развлечение': 2500, 'авто': 3000, 'дети': 5000,
+                  'связь': 800, 'дом': 1500, 'накопления': 4000, 'одежда': 1000, 'работа': 1000,
+                  'красота': 1500, 'кредиты': 20000, 'кварплата': 6000}
+
+    for cat in Category.select():
+        cat.plan_money = categories[cat.name]
+        cat.save()
+
+# add_column()
