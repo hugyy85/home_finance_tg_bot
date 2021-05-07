@@ -151,7 +151,7 @@ async def show_report(message):
     total_balance = report_period.balance - spent_money.sum
     plan_and_real = Product.select(fn.SUM(Product.price), Category.name, Category.plan_money).join(Category)\
         .where((Product.user == user) & (Product.report_month == report_period))\
-        .group_by(Category.name, Category.plan_money).order_by(Category.id)
+        .group_by(Category.id, Category.name, Category.plan_money).order_by(Category.id)
     answer = 'Потрачено - Запланировано - Остаток - Категория\n'
     for plan in plan_and_real:
         answer += f'{plan.sum}  -  {plan.category.plan_money}  -  {plan.category.plan_money - plan.sum}  -  {plan.category.name}\n'
