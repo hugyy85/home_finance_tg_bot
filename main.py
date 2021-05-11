@@ -171,7 +171,6 @@ def __get_beauty_table(money, pattern):
     return string + ' ' * space_count if space_count > 0 else string
 
 
-
 @dp.message_handler(commands=['show_last_products'])
 async def show_last_products(message):
     try:
@@ -208,11 +207,11 @@ async def remove_product_by_id(message):
         return
     product_id = message_text[1]
     try:
-        product = Product.get(id=product_id)
+        product = Product.get(id=product_id, user=user)
         product.delete_instance()
+        answer = f'Покупка с айди {product_id} удалена'
     except Product.DoesNotExist:
-        answer = 'Покупки с таким ID не существует'
-    answer = f'Покупка с айди {product_id} удалена'
+        answer = 'Покупки с таким ID для данного пользователя не существует'
     await message.reply(answer)
 
 
