@@ -152,9 +152,9 @@ async def show_report(message):
     plan_and_real = Product.select(fn.SUM(Product.price), Category.name, Category.plan_money).join(Category)\
         .where((Product.user == user) & (Product.report_month == report_period))\
         .group_by(Category.id, Category.name, Category.plan_money).order_by(Category.id)
-    answer = 'Потрачено - Запланировано - Остаток - Категория\n'
+    answer = 'Потрачено | Запланировано | Остаток | Категория\n'
     for plan in plan_and_real:
-        answer += f'{plan.sum}  -  {plan.category.plan_money}  -  {plan.category.plan_money - plan.sum}  -  {plan.category.name}\n'
+        answer += f'{plan.sum}  |  {plan.category.plan_money}  |  {plan.category.plan_money - plan.sum}  |  {plan.category.name}\n'
     answer += f"Остаток в этом месяце: {total_balance}\nОстаток на карте(+отложенные) {total_balance + piggy_bank.sum}"
     await message.reply(answer)
 
@@ -167,7 +167,13 @@ async def show_last_products(message):
         await message.reply("Для вашего пользователя отчета нет")
         return
 
-    products = Product.select().where(Product.user == user).order_by(Product.id.desc())
+    message_text = message.text.split()
+    try:
+        limit = int(message_text[1]) if len(message_text) == 2 else 20
+    except ValueError:
+        limit = 20
+
+    products = Product.select().where(Product.user == user).order_by(Product.id.desc()).limit(limit)
     answer = ''
     for prod in products:
         answer += f'{prod.id} - {prod.name} - {prod.price} - {prod.creation_date.strftime("%d.%m.%y %H:%M:%S")}\n'
@@ -215,6 +221,7 @@ async def answer_tmpl(message):
 # добавить фронт для отображения таблицы с данными - сколько потрачено, в каких категориях, и кем,
 # добавить возможность изменять piggybank из фронта,
 # добавить планированный бюджет и если бюджет привышен, то алерт
+# Как идея перенести все данные в гугл таблицу по кнопке, чтобы там тоже смотреть можно было
 
 
 if __name__ == '__main__':
