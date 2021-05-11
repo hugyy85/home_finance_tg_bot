@@ -152,11 +152,24 @@ async def show_report(message):
     plan_and_real = Product.select(fn.SUM(Product.price), Category.name, Category.plan_money).join(Category)\
         .where((Product.user == user) & (Product.report_month == report_period))\
         .group_by(Category.id, Category.name, Category.plan_money).order_by(Category.id)
-    answer = 'Потрачено | Запланировано | Остаток | Категория\n'
+    spent = ' Потрачено '
+    plan_t = ' Запланировано '
+    total = ' Остаток '
+    category = ' Категория\n'
+    answer = '|'.join([spent, plan_t, total, category])
     for plan in plan_and_real:
-        answer += f'{plan.sum}  |  {plan.category.plan_money}  |  {plan.category.plan_money - plan.sum}  |  {plan.category.name}\n'
-    answer += f"Остаток в этом месяце: {total_balance}\nОстаток на карте(+отложенные) {total_balance + piggy_bank.sum}"
+        answer += f'{__get_beauty_table(plan.sum, spent)}| {__get_beauty_table(plan.category.plan_money, plan_t)}|' \
+                  f' {__get_beauty_table(plan.category.plan_money - plan.sum, total)}|' \
+                  f' {plan.category.name}\n'
+    answer += f"\nОстаток в этом месяце: {total_balance}\nОстаток на карте(+отложенные) {total_balance + piggy_bank.sum}"
     await message.reply(answer)
+
+
+def __get_beauty_table(money, pattern):
+    string = str(money)
+    space_count = (len(pattern) - len(string)) * 2
+    return string + ' ' * space_count if space_count > 0 else string
+
 
 
 @dp.message_handler(commands=['show_last_products'])
