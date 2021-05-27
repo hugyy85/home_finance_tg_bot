@@ -136,12 +136,19 @@ async def next_report_period(message):
     await message.reply(answer)
 
 
-@dp.message_handler(commands=['show_report'])
-async def show_report(message):
+async def is_user_register(message):
     try:
-        user = User.get(**dict(message.chat))
+        user = User.get(id=message.chat['id'])
     except User.DoesNotExist:
         await message.reply("Для вашего пользователя отчета нет")
+        user = None
+    return user
+
+
+@dp.message_handler(commands=['show_report'])
+async def show_report(message):
+    user = await is_user_register(message)
+    if user is None:
         return
     report_period = ReportPeriod.select().order_by(ReportPeriod.id.desc()).get()
     spent_money = Product.select(fn.SUM(Product.price)) \
@@ -173,10 +180,8 @@ def __get_beauty_table(money, pattern):
 
 @dp.message_handler(commands=['show_last_products'])
 async def show_last_products(message):
-    try:
-        user = User.get(**dict(message.chat))
-    except User.DoesNotExist:
-        await message.reply("Для вашего пользователя отчета нет")
+    user = await is_user_register(message)
+    if user is None:
         return
 
     message_text = message.text.split()
@@ -195,10 +200,8 @@ async def show_last_products(message):
 
 @dp.message_handler(commands=['remove_product_by_id'])
 async def remove_product_by_id(message):
-    try:
-        user = User.get(**dict(message.chat))
-    except User.DoesNotExist:
-        await message.reply("Для вашего пользователя отчета нет")
+    user = await is_user_register(message)
+    if user is None:
         return
 
     message_text = message.text.split()
@@ -229,7 +232,6 @@ async def answer_tmpl(message):
     await message.reply(answer)
 
 
-# добавить перерасходы,
 # добавить фронт для отображения таблицы с данными - сколько потрачено, в каких категориях, и кем,
 # добавить возможность изменять piggybank из фронта,
 # добавить планированный бюджет и если бюджет привышен, то алерт
