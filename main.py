@@ -168,12 +168,12 @@ async def show_report(message):
         answer += f'{__get_beauty_table(plan.sum, spent)}| {__get_beauty_table(plan.category.plan_money, plan_t)}|' \
                   f' {__get_beauty_table(plan.category.plan_money - plan.sum, total)}|' \
                   f' {plan.category.name}\n'
-    answer += f"\nОстаток в этом месяце: {total_balance}\nОстаток на карте(+отложенные) {total_balance + piggy_bank.sum}"
+    answer += f"\nОстаток в этом месяце: {round(total_balance, 2)}\nОстаток на карте(+отложенные) {round(total_balance + piggy_bank.sum, 2)}"
     await message.reply(answer)
 
 
 def __get_beauty_table(money, pattern):
-    string = str(money)
+    string = str(round(money, 2))
     space_count = (len(pattern) - len(string)) * 2
     return string + ' ' * space_count if space_count > 0 else string
 
