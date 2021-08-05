@@ -17,6 +17,7 @@ storage = RedisStorage(REDIS_HOST, REDIS_PORT, db=REDIS_DB)
 dp = Dispatcher(bot, storage=storage)
 CATEGORIES = [x.name.lower() for x in Category.select()]
 PAYER = [x.name.lower() for x in Payer.select()]
+PIGGY = [x.name.lower() for x in PiggyBank.select()]
 
 
 # ============= Процесс добавления нового товара в БД ================
@@ -218,11 +219,73 @@ async def remove_product_by_id(message):
     await message.reply(answer)
 
 
+@dp.message_handler(commands=['show_piggy_bank'])
+async def show_piggy_bank(message):
+    user = await is_user_register(message)
+    if user is None:
+        return
+
+    message_text = message.text.split()
+    try:
+        limit = int(message_text[1]) if len(message_text) == 2 else 20
+    except ValueError:
+        limit = 20
+
+    piggy = PiggyBank.select()
+    answer = ''
+    for pig in piggy:
+        answer += f'{pig.id} - {pig.name} - {pig.balance}\n'
+
+    await message.reply(answer)
+
+
+class PiggyChange(StatesGroup):
+    waiting_for_piggy_name = State()
+    waiting_for_piggy_balance = State()
+
+
+@dp.message_handler(commands=['change_piggy_bank'], state='*')
+async def change_piggy_start(message: types.Message):
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    for pig in PIGGY:
+        button = KeyboardButton(pig)
+        keyboard.insert(button)
+    await message.answer("Выберите копилку:", reply_markup=keyboard)
+    await PiggyChange.waiting_for_piggy_name.set()
+
+
+@dp.message_handler(state=PiggyChange.waiting_for_piggy_name)
+async def piggy_name_chosen(message: types.Message, state: FSMContext):
+    if message.text.lower() not in PIGGY:
+        await message.answer("Пожалуйста, выберите копилку, используя клавиатуру ниже.")
+        return
+    await state.update_data(chosen_piggy=message.text.lower())
+
+    await PiggyChange.next()
+    await message.answer("Теперь введите новую сумму для копилки:")
+
+
+@dp.message_handler(state=PiggyChange.waiting_for_piggy_balance)
+async def piggy_balance_chosen(message: types.Message, state: FSMContext):
+    await state.update_data(chosen_balance=message.text.lower())
+    user_data = await state.get_data()
+    piggy = PiggyBank.get(name=user_data['chosen_piggy'])
+    piggy.balance = user_data['chosen_balance']
+    piggy.save()
+
+    await message.answer(f"Вы ввели копилку "
+                         f"{user_data['chosen_piggy']}. Баланс изменился на {user_data['chosen_balance']}.\n")
+    await OrderProduct.next()
+    await state.finish()
+
+
 @dp.message_handler()
 async def answer_tmpl(message):
     answer = """
        /add_product - Добавить запись о покупке
        /last_date_check - Показать последнюю дату добавления покупки
+       /change_piggy_bank - Обновить копилку
+       /show_piggy_bank - Показать копилку
        /show_report_period - Показать отчетный месяц
        /next_report_period 80000 - Перейти в следующий отчетный месяц c балансом 80000
        /show_report - Показать отчет за текущий месяц
